@@ -4,7 +4,7 @@ const express = require("express");
 const app = express();
 const PORT = process.env.PORT || 5000;
 const bodyParser = require("body-parser");
-const { createAccount } = require("./Authenticate");
+const { createAccount, Transaction } = require("./Authenticate");
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: false }));
@@ -62,8 +62,93 @@ app.post("/create-account", (req, res) => {
   }
 });
 
-app.post("/transfer", (req, res) => {
-  res.send("transfer completed");
+app.post("/transfer", async (req, res) => {
+  const { error, value } = Transaction(req.body);
+
+  if (error) {
+    return res.status(400).send(error);
+  }
+
+  var deposit = value.amount;
+
+  var senderAcctNo = value.senderAccount;
+
+  var Narration = value.Narration;
+
+  var receiverAccount = value.receiverAccount;
+
+  var senderBalance,
+    receiverBalance = 0;
+
+  let SenderName, ReceiverName;
+
+  try {
+    const senderAccnt = await Balance.find(
+      { accountNumber: senderAcctNo },
+      "Fullname Balance -_id"
+    ).exec();
+
+    const recieverAcct = await Balance.find(
+      { accountNumber: receiverAccount },
+      "Fullname Balance -_id"
+    ).exec();
+
+    senderAccnt.forEach((item) => {
+      senderBalance = item.Balance;
+
+      SenderName = item.fullName;
+    });
+
+    recieverAcct.forEach((item) => {
+      ReceiverName = item.fullName;
+
+      receiverBalance = item.Balance;
+    });
+
+    if (senderBalance >= deposit) {
+      senderBalance -= deposit;
+
+      receiverBalance += deposit;
+
+      await Balance.updateOne(
+        { accountNumber: senderAcctNo },
+        { $set: { Balance: senderBalance } }
+      );
+
+      await Balance.updateOne(
+        { accountNumber: receiverAccount },
+        { $set: { Balance: receiverBalance } }
+      );
+
+      const trans = new Transaction({
+        reference: referenceNo,
+
+        senderName: SenderName,
+
+        senderAccount: senderAcctNo,
+
+        amount: deposit,
+
+        receiverName: ReceiverName,
+
+        receiverAccount: receiverAccount,
+
+        narration: Narration,
+
+        createAt: Date(),
+      });
+
+      trans.save().then(() => {
+        console.log("Transfer done");
+      });
+
+      res.status(200).send(`Transfer done succesfully.`);
+    } else {
+      res.send("Insufficient Balance");
+    }
+  } catch (error) {
+    console.error(error);
+  }
 });
 
 app.get("/balance/:accountNumber", async (req, res) => {
